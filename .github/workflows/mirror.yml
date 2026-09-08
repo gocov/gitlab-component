@@ -2,9 +2,10 @@ name: mirror
 
 # gitlab.com/gocov/gocov is a push mirror of this repo: the CI/CD Catalog
 # entry lives there and its pipeline is the component's real test. Every
-# push to main goes across; release tags go across from
-# tag-on-release-merge.yml, which pushes them with GITHUB_TOKEN and so
-# cannot rely on this trigger firing.
+# push to main goes across, and so does a hand-pushed release tag (the
+# escape hatch). Tags cut by tag-on-release-merge.yml are pushed with
+# GITHUB_TOKEN, which starts no workflow runs, so that workflow mirrors
+# them itself.
 #
 # Repository secret: GITLAB_MIRROR_TOKEN — a GitLab personal access token
 # scoped to the gocov/gocov project with Code: Push. Run mirror-check.yml
@@ -13,6 +14,7 @@ name: mirror
 on:
   push:
     branches: [main]
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
   contents: read
@@ -24,10 +26,18 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Push main to GitLab
+      - name: Push to GitLab
         env:
           GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
+          REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           [ -n "$GITLAB_MIRROR_TOKEN" ] || { echo "GITLAB_MIRROR_TOKEN is not set" >&2; exit 1; }
-          git push "https://oauth2:$GITLAB_MIRROR_TOKEN@gitlab.com/gocov/gocov.git" "HEAD:refs/heads/main"
+          # A branch push mirrors main; a tag push mirrors main and the tag,
+          # so the GitLab pipeline that creates the catalog release sees both.
+          case "$REF" in
+            refs/tags/*) refs="refs/remotes/origin/main:refs/heads/main $REF:$REF" ;;
+            *) refs="HEAD:refs/heads/main" ;;
+          esac
+          # shellcheck disable=SC2086
+          git push "https://oauth2:$GITLAB_MIRROR_TOKEN@gitlab.com/gocov/gocov.git" $refs
