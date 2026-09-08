@@ -1,0 +1,41 @@
+name: ci
+
+# The real test of the component is the GitLab pipeline on the mirror,
+# which runs the template on itself. This holds what can be checked
+# without GitLab: the YAML parses, the pins agree, and the inline sh —
+# which runs under busybox on Alpine — passes shellcheck in POSIX mode.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Parse the template and the pipeline
+        run: |
+          python3 - <<'PY'
+          import yaml
+          docs = list(yaml.safe_load_all(open("templates/upload.yml")))
+          assert len(docs) == 2 and "inputs" in docs[0]["spec"], "template must be spec + one job"
+          yaml.safe_load(open(".gitlab-ci.yml"))
+          print("yaml ok")
+          PY
+      - name: Shellcheck the job script as POSIX sh
+        run: |
+          python3 - <<'PY' > job.sh
+          import yaml
+          job = list(yaml.safe_load_all(open("templates/upload.yml")))[1]
+          (name, spec), = job.items()
+          print("#!/bin/sh")
+          for line in spec["script"]:
+              print(line)
+          PY
+          shellcheck -s sh -e SC2086 job.sh
+      - run: ./scripts/check-pins.sh

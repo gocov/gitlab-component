@@ -1,0 +1,32 @@
+name: mirror-check
+
+# Proves the GitLab mirror credential actually works, on demand — after
+# first setting GITLAB_MIRROR_TOKEN, or after rotating it. Reads the
+# mirror, pushes a throwaway tag, deletes it. Nothing in the real history
+# is touched.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read and write against the GitLab mirror
+        env:
+          GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "$GITLAB_MIRROR_TOKEN" ] || { echo "GITLAB_MIRROR_TOKEN is empty"; exit 1; }
+          url="https://oauth2:$GITLAB_MIRROR_TOKEN@gitlab.com/gocov/gocov.git"
+          git ls-remote "$url" HEAD >/dev/null
+          echo "read: ok (credential accepted, project visible)"
+          git init -q probe && cd probe
+          git config user.name probe && git config user.email probe@invalid
+          git commit -q --allow-empty -m "mirror write probe"
+          git push -q "$url" HEAD:refs/tags/mirror-check
+          echo "write: ok (token can push)"
+          git push -q "$url" :refs/tags/mirror-check
+          echo "cleanup: ok (probe tag deleted)"

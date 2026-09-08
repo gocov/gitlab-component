@@ -1,0 +1,45 @@
+# The component's own pipeline: run it on itself, then publish.
+#
+# The include names this very commit, so every push tests the template as
+# it is, not the last release. The test job writes a real coverage profile
+# from selftest/ and the component uploads it to the hosted service —
+# with GOCOV_TOKEN if the project defines one, via OIDC otherwise.
+#
+# A semver tag creates the release the CI/CD Catalog lists; the catalog
+# only accepts releases made with the `release` keyword from a job.
+
+include:
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_PATH/upload@$CI_COMMIT_SHA
+    inputs:
+      files: selftest/coverage.out
+      needs: [test]
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+stages: [test, release]
+
+test:
+  stage: test
+  image: golang:1.27
+  script:
+    - cd selftest && go test -covermode=atomic -coverprofile=coverage.out ./...
+  artifacts:
+    paths: [selftest/coverage.out]
+    expire_in: 1 hour
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/
+  script:
+    - echo "releasing $CI_COMMIT_TAG to the CI/CD Catalog"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: >-
+      gocov coverage upload component $CI_COMMIT_TAG — see CHANGELOG.md
+      for the gocov CLI release it installs.

@@ -1,0 +1,33 @@
+name: mirror
+
+# gitlab.com/gocov/gocov is a push mirror of this repo: the CI/CD Catalog
+# entry lives there and its pipeline is the component's real test. Every
+# push to main goes across; release tags go across from
+# tag-on-release-merge.yml, which pushes them with GITHUB_TOKEN and so
+# cannot rely on this trigger firing.
+#
+# Repository secret: GITLAB_MIRROR_TOKEN — a GitLab personal access token
+# scoped to the gocov/gocov project with Code: Push. Run mirror-check.yml
+# after setting or rotating it.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Push main to GitLab
+        env:
+          GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "$GITLAB_MIRROR_TOKEN" ] || { echo "GITLAB_MIRROR_TOKEN is not set" >&2; exit 1; }
+          git push "https://oauth2:$GITLAB_MIRROR_TOKEN@gitlab.com/gocov/gocov.git" "HEAD:refs/heads/main"

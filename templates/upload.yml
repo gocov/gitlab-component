@@ -1,0 +1,131 @@
+# gocov coverage upload — a GitLab CI/CD component.
+#
+# Adds one job that downloads the pinned gocov CLI release (sha256-verified
+# against the release's checksums.txt), then uploads the coverage files a
+# previous job left as artifacts. Project, commit, branch and merge request
+# are auto-detected by the CLI from the GitLab CI environment.
+#
+# Credentials, in the CLI's own precedence order:
+#   1. $GOCOV_TOKEN — a masked (not protected) CI/CD variable on the project
+#      or group, holding the workspace's upload token.
+#   2. OIDC — the job always carries an id_tokens entry named GOCOV_ID_TOKEN
+#      whose audience is the gocov server, so with no token at all the
+#      upload is verified through the workspace's GitLab connection. A
+#      rejected OIDC upload logs the reason and exits 0.
+#
+# Inputs are placed into `variables:` and read by the CLI from the
+# environment; nothing is interpolated into the script text, so an input
+# value cannot inject shell.
+spec:
+  description: >-
+    Upload test coverage (Go, JS/TS, Java, Python, PHP, Ruby) to gocov —
+    diff coverage on merge requests, commit statuses, coverage gates and a
+    badge, hosted or self-hosted, with or without a token.
+  inputs:
+    files:
+      description: >-
+        Coverage file(s) to upload, produced by the jobs in `needs` and
+        passed on as artifacts. Comma-separated, shell globs allowed
+        (e.g. "coverage.out" or "cover/*.out").
+      default: coverage.out
+    needs:
+      description: >-
+        The job(s) whose artifacts hold the coverage files, e.g. [test].
+        The upload runs after them and downloads their artifacts.
+      type: array
+    stage:
+      description: Stage to run the upload job in.
+      default: test
+    job-name:
+      description: >-
+        Name of the upload job. Change it when including the component
+        more than once (one job per `part`).
+      default: gocov-upload
+    server:
+      description: gocov server URL. Override when self-hosting.
+      default: https://app.gocov.dev
+    part:
+      description: >-
+        Label for this upload when a commit's coverage is split across
+        jobs (e.g. "backend", "frontend"); the server merges the parts
+        uploaded for the same commit into one report.
+      default: ""
+    ignore:
+      description: >-
+        Glob patterns for files to leave out of the report, on top of the
+        repo's own ignore settings — comma-separated (e.g.
+        "cmd/preview/**,*_mock.go").
+      default: ""
+    allow-failure:
+      description: >-
+        Let the pipeline pass when the upload fails. Off by default: an
+        upload that fails is worth seeing.
+      type: boolean
+      default: false
+    version:
+      description: >-
+        gocov CLI version to download, as a gocov/gocov release tag. The
+        default is the version this component release was tested against.
+      default: v0.23.0
+    image:
+      description: >-
+        Image the upload job runs in. Anything with a POSIX sh, wget (or
+        curl) and sha256sum works; the default is plain Alpine.
+      default: alpine:3.22
+---
+"$[[ inputs.job-name ]]":
+  stage: $[[ inputs.stage ]]
+  image: $[[ inputs.image ]]
+  needs: $[[ inputs.needs ]]
+  allow_failure: $[[ inputs.allow-failure ]]
+  id_tokens:
+    GOCOV_ID_TOKEN:
+      aud: $[[ inputs.server ]]
+  variables:
+    GOCOV_SERVER: $[[ inputs.server ]]
+    GOCOV_PART: $[[ inputs.part ]]
+    GOCOV_IGNORE: $[[ inputs.ignore ]]
+    GOCOV_FILES: $[[ inputs.files ]]
+    GOCOV_CLI_VERSION: $[[ inputs.version ]]
+  script:
+    - |
+      set -eu
+      # --- install: the release binary for this runner, checksum-verified
+      arch=$(uname -m)
+      case "$arch" in
+        x86_64) arch=amd64 ;;
+        aarch64|arm64) arch=arm64 ;;
+        *) echo "gocov: unsupported runner architecture $arch" >&2; exit 1 ;;
+      esac
+      base="https://github.com/gocov/gocov/releases/download/$GOCOV_CLI_VERSION"
+      dir=$(mktemp -d)
+      fetch() {
+        if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$2" "$1"
+        else wget -q -O "$2" "$1"; fi
+      }
+      fetch "$base/gocov-linux-$arch" "$dir/gocov-linux-$arch"
+      fetch "$base/checksums.txt" "$dir/checksums.txt"
+      (cd "$dir" && grep " gocov-linux-$arch\$" checksums.txt | sha256sum -c -)
+      mv "$dir/gocov-linux-$arch" "$dir/gocov"
+      chmod +x "$dir/gocov"
+      echo "gocov CLI $GOCOV_CLI_VERSION installed"
+      # --- upload: every file matching the comma-separated globs
+      if [ -z "${GOCOV_TOKEN:-}" ]; then
+        echo "no GOCOV_TOKEN — uploading via OIDC, verified by the server through the workspace's GitLab connection"
+      fi
+      n=0; failed=0
+      oldifs=$IFS; IFS=','; set -- $GOCOV_FILES; IFS=$oldifs
+      for pat in "$@"; do
+        pat=$(printf '%s' "$pat" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        [ -n "$pat" ] || continue
+        matched=0
+        for f in $pat; do
+          [ -e "$f" ] || continue
+          matched=1; n=$((n + 1))
+          echo "uploading $f"
+          "$dir/gocov" upload "$f" || failed=$((failed + 1))
+        done
+        [ "$matched" -eq 1 ] || echo "warning: no files match '$pat'" >&2
+      done
+      [ "$n" -gt 0 ] || { echo "gocov: no coverage files matched: $GOCOV_FILES" >&2; exit 1; }
+      [ "$failed" -eq 0 ] || { echo "gocov: $failed of $n upload(s) failed" >&2; exit 1; }
