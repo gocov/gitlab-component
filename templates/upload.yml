@@ -66,7 +66,7 @@ spec:
       description: >-
         gocov CLI version to download, as a gocov/gocov release tag. The
         default is the version this component release was tested against.
-      default: v0.26.0
+      default: v0.26.1
     image:
       description: >-
         Image the upload job runs in. Anything with a POSIX sh, wget (or
