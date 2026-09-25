@@ -54,7 +54,7 @@ SHA on merged-results pipelines.
 | `part` | | Label for this upload when a commit's coverage is split across jobs; the server merges the parts for the same commit. See [parts](https://docs.gocov.dev/parts/). |
 | `ignore` | | Glob patterns for files to leave out of the report, comma-separated (`cmd/preview/**,*_mock.go`). See [ignoring files](https://docs.gocov.dev/ignoring-files/). |
 | `allow-failure` | `false` | Let the pipeline pass when the upload fails. |
-| `version` | `v0.25.0` | gocov CLI release to install. The default is the one this component release was tested against. |
+| `version` | `v0.26.0` | gocov CLI release to install. The default is the one this component release was tested against. |
 | `image` | `alpine:3.22` | Image for the upload job. Anything with a POSIX `sh`, `wget` or `curl`, and `sha256sum`. |
 
 The token is never an input: the job reads `GOCOV_TOKEN` from the CI/CD
