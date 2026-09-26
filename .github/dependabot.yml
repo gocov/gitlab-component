@@ -1,0 +1,13 @@
+# Keeps the workflows' action pins current — GitHub deprecates a Node
+# runtime every year or so, and every action we use has to be bumped a
+# major to follow it. One grouped PR a week, as in gocov-action and
+# upload-pipe.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
