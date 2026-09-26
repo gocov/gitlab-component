@@ -2,9 +2,10 @@ name: tag-on-release-merge
 
 # The merge half of the cross-repo bump: a gocov release opens a bump PR
 # here carrying the `release` label, and merging that PR is the release
-# decision — so this tags the next minor on the merge commit, creates the
-# GitHub release, and pushes main plus the tag to the GitLab mirror, whose
-# pipeline creates the CI/CD Catalog release from the tag.
+# decision — so this tags the merge commit with the version the PR's
+# CHANGELOG.md entry names, creates the GitHub release, and pushes main
+# plus the tag to the GitLab mirror, whose pipeline creates the CI/CD
+# Catalog release from the tag.
 #
 # Tags are bare semver (1.2.0, no v): the catalog requires it.
 #
@@ -25,27 +26,25 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Compute the next minor
+      - name: Read the version CHANGELOG.md releases
         id: next
-        # A CLI bump is always a minor release; the version is derived from
-        # the newest existing tag, 1.0.0 when there is none yet.
+        # The newest `## X.Y.Z` heading is the release, as in gocov-action
+        # and upload-pipe: the bump PR writes it.
         run: |
-          latest=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
-          if [ -z "$latest" ]; then
-            tag=1.0.0
-          else
-            major=${latest%%.*}; rest=${latest#*.}
-            tag="$major.$(( ${rest%%.*} + 1 )).0"
+          tag=$(sed -n 's/^## \([0-9][0-9.]*\) *$/\1/p' CHANGELOG.md | head -1)
+          [ -n "$tag" ] || { echo "no '## X.Y.Z' heading in CHANGELOG.md" >&2; exit 1; }
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "tag $tag already exists — did the bump PR forget its CHANGELOG entry?" >&2
+            exit 1
           fi
-          grep -q "^## $tag\$" CHANGELOG.md || { echo "CHANGELOG.md has no '## $tag' entry" >&2; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "releasing $tag (latest was ${latest:-none})"
+          echo "releasing $tag"
 
       - name: Tag the merge commit
         run: |
@@ -58,7 +57,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.next.outputs.tag }}
-        run: gh release create "$TAG" --title "$TAG" --generate-notes
+        # The notes are the version's CHANGELOG.md entry, as in gocov-action
+        # and upload-pipe.
+        run: |
+          awk -v v="$TAG" '/^## /{f = ($2 == v); next} f' CHANGELOG.md >notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md
 
       - name: Mirror main and the tag to GitLab
         # The catalog reads the GitLab project, and a tag that lands only

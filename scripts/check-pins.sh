@@ -35,4 +35,21 @@ if [ -n "$bad" ]; then
   printf '%s\n' "$bad" | sed 's/^/  /' >&2
   exit 1
 fi
-echo "check-pins: CLI pinned at $default in templates/upload.yml; $(echo "$pins" | grep -c . | tr -d ' ') other pin(s) agree"
+# The newest CHANGELOG.md entry is the release the next merge tags, and
+# names the CLI it installs in the phrase every entry uses — "Install
+# gocov CLI v0.26.1 (was v0.26.0)". Only the first "gocov CLI vX" is
+# matched, not the version it replaces. An entry that changes nothing
+# about the CLI need not name one; one that contradicts the template
+# fails. The same check runs in gocov-action and upload-pipe.
+version=$(sed -n 's/^## \([0-9][0-9.]*\) *$/\1/p' CHANGELOG.md | head -1)
+if [ -z "$version" ]; then
+  echo "check-pins: no '## X.Y.Z' heading in CHANGELOG.md." >&2
+  exit 1
+fi
+claimed=$(awk '/^## /{n++} n==1' CHANGELOG.md | sed -n 's/.*gocov CLI \(v[0-9][0-9.]*[0-9]\).*/\1/p' | head -1)
+if [ -n "$claimed" ] && [ "$claimed" != "$default" ]; then
+  echo "check-pins: CHANGELOG.md's $version entry says it installs $claimed, but templates/upload.yml pins $default." >&2
+  exit 1
+fi
+
+echo "check-pins: CLI pinned at $default in templates/upload.yml${claimed:+ (as CHANGELOG.md $version says)}; $(echo "$pins" | grep -c . | tr -d ' ') other pin(s) agree"
