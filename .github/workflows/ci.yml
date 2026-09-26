@@ -1,9 +1,13 @@
 name: ci
 
 # The real test of the component is the GitLab pipeline on the mirror,
-# which runs the template on itself. This holds what can be checked
-# without GitLab: the YAML parses, the pins agree, and the inline sh —
-# which runs under busybox on Alpine — passes shellcheck in POSIX mode.
+# which runs the template on itself — but only after a change is merged
+# and mirrored. This holds what can be checked without GitLab, before the
+# merge: the YAML parses, the pins agree, the inline sh — which runs under
+# busybox on Alpine — passes shellcheck in POSIX mode, and test/e2e.sh runs
+# that script with the pinned CLI against a fake server. A gocov release
+# opens a bump PR here and auto-merges it when these pass, so they are
+# what stands between a CLI release and the component's.
 
 on:
   push:
@@ -38,4 +42,17 @@ jobs:
               print(line)
           PY
           shellcheck -s sh -e SC2086 job.sh
+      - run: shellcheck test/e2e.sh
       - run: ./scripts/check-pins.sh
+
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: PyYAML, which the arm image may not carry
+        run: python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
+      - run: bash test/e2e.sh
