@@ -21,7 +21,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Parse the template and the pipeline
         run: |
           python3 - <<'PY'
@@ -52,7 +52,7 @@ jobs:
         os: [ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: PyYAML, which the arm image may not carry
         run: python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
       - run: bash test/e2e.sh
