@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.17.0
+
+- Install gocov CLI v0.30.1 (was v0.30.0).
+
 ## 1.16.0
 
 - Install gocov CLI v0.30.0 (was v0.29.0).
