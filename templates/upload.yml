@@ -18,9 +18,10 @@
 # value cannot inject shell.
 spec:
   description: >-
-    Upload test coverage (Go, JS/TS, Java, Python, PHP, Ruby) to gocov —
-    diff coverage on merge requests, commit statuses, coverage gates and a
-    badge, hosted or self-hosted, with or without a token.
+    Upload test coverage (Go, JS/TS, Java, Python, PHP, Ruby, .NET, Swift
+    and more) to gocov — diff coverage on merge requests, commit statuses,
+    coverage gates and a badge, hosted or self-hosted, with or without a
+    token.
   inputs:
     files:
       description: >-

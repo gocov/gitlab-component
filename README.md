@@ -1,10 +1,10 @@
 # gocov coverage upload — GitLab CI/CD component
 
 Upload test coverage to [gocov](https://app.gocov.dev) from GitLab CI —
-Go, JavaScript/TypeScript (LCOV), Java (JaCoCo), Python (Cobertura), PHP
-(Clover), Ruby (SimpleCov): diff coverage on merge requests, commit
-statuses, a coverage gate and a README badge, on the hosted service or your
-own server. With a token, or with none at all.
+Go, JavaScript/TypeScript, Java/Kotlin, Python, PHP, Ruby, .NET, Swift and
+[more](https://docs.gocov.dev/languages/): diff coverage on merge requests,
+commit statuses, a coverage gate and a README badge, on the hosted service
+or your own server. With a token, or with none at all.
 
 Full documentation: [docs.gocov.dev](https://docs.gocov.dev) — in
 particular [GitLab CI](https://docs.gocov.dev/gitlab-ci/), [the coverage
